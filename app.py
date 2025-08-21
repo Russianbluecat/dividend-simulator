@@ -346,6 +346,10 @@ def main():
                 if not show_forecast:
                     filtered_df = filtered_df[filtered_df['구분'] != '예측']
                 
+                # 날짜_dt 컬럼 제거 (중복이므로)
+                if '날짜_dt' in filtered_df.columns:
+                    filtered_df = filtered_df.drop('날짜_dt', axis=1)
+                
                 # 숫자 형식 지정하여 표시
                 display_df = filtered_df.copy()
                 display_df = display_df.round(2)
