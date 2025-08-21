@@ -22,7 +22,8 @@ def get_currency_info(ticker):
     if '.KS' in ticker_upper or '.KQ' in ticker_upper:
         return '₩', 'KRW'
     else:
-        return '
+        # SyntaxError가 발생했던 부분을 수정했습니다.
+        return '$', 'USD'
     
     # 통화 정보 설정
     currency_symbol, currency_code = get_currency_info(ticker)
