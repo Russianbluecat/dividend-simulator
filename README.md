@@ -20,8 +20,6 @@
 
 **웹사이트**: [https://dividend-simulator.streamlit.app](https://dividend-simulator.streamlit.app)
 
-## 📸 스크린샷
-
 ## 🛠 로컬 설치 및 실행
 
 ### 요구사항
