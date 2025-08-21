@@ -16,7 +16,7 @@ st.set_page_config(
 
 def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
     """
-    심플한 배당 재투자 예측 계산기
+    심플한 배당 재투자 예측 계산기 (개선된 배당 주기 분석 버전)
     """
     
     # 진행 상황 표시
@@ -110,21 +110,70 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
     progress_bar.progress(80)
     status_text.text("🔮 미래 예측 계산 중...")
 
+    # === 💡 핵심 수정 부분: 배당 주기 분석 로직 추가 ===
+    dividend_dates = actual_dividends.index
+    
+    if len(dividend_dates) > 1:
+        # 날짜 간의 평균 간격 계산
+        intervals = []
+        for i in range(1, len(dividend_dates)):
+            interval = (dividend_dates[i] - dividend_dates[i-1]).days
+            intervals.append(interval)
+        
+        avg_interval_days = sum(intervals) / len(intervals)
+        
+        # 배당 주기 판단
+        if 25 <= avg_interval_days <= 35:
+            dividend_frequency_unit = '매월'
+            dividend_frequency_desc = '매월'
+            delta = relativedelta(months=1)
+        elif 80 <= avg_interval_days <= 100:
+            dividend_frequency_unit = '분기'
+            dividend_frequency_desc = '분기별 (3개월)'
+            delta = relativedelta(months=3)
+        elif 170 <= avg_interval_days <= 200:
+            dividend_frequency_unit = '반기'
+            dividend_frequency_desc = '반기별 (6개월)'
+            delta = relativedelta(months=6)
+        elif 350 <= avg_interval_days <= 380:
+            dividend_frequency_unit = '연간'
+            dividend_frequency_desc = '연간 (12개월)'
+            delta = relativedelta(years=1)
+        else:
+            # 그 외 대부분의 경우 (월, 격월 등)
+            dividend_frequency_unit = '매월'
+            dividend_frequency_desc = f'매월 (실제 간격: {avg_interval_days:.0f}일)'
+            delta = relativedelta(months=1)
+    else:
+        # 배당 데이터가 1개 이하일 경우 기본값으로 월간 설정
+        dividend_frequency_unit = '매월'
+        dividend_frequency_desc = '매월 (기본값)'
+        delta = relativedelta(months=1)
+        avg_interval_days = 30
+
     # === 2단계: 미래 예측 ===
     if end_date_obj > today:
-        # 다음 배당일부터 시작 (매월 마지막 날)
-        next_month = today.replace(day=1) + relativedelta(months=1)
+        # 마지막 배당일 기준으로 다음 배당일 계산
+        if len(dividend_dates) > 0:
+            last_dividend_date = dividend_dates[-1].date()
+            next_dividend_date = last_dividend_date
+            # 다음 배당일까지 주기만큼 더하기
+            while next_dividend_date <= today:
+                if dividend_frequency_unit == '연간':
+                    next_dividend_date = next_dividend_date + relativedelta(years=1)
+                elif dividend_frequency_unit == '반기':
+                    next_dividend_date = next_dividend_date + relativedelta(months=6)
+                elif dividend_frequency_unit == '분기':
+                    next_dividend_date = next_dividend_date + relativedelta(months=3)
+                else:  # 매월
+                    next_dividend_date = next_dividend_date + relativedelta(months=1)
+        else:
+            next_dividend_date = today + delta
 
-        current_date = next_month
+        current_date = next_dividend_date
+        
         while current_date <= end_date_obj:
-            # 매월 마지막 날로 설정
-            last_day_of_month = current_date + relativedelta(months=1) - timedelta(days=1)
-
-            # 주말이면 금요일로 조정
-            while last_day_of_month.weekday() > 4:
-                last_day_of_month -= timedelta(days=1)
-
-            div_date_str = last_day_of_month.strftime('%Y-%m-%d')
+            div_date_str = current_date.strftime('%Y-%m-%d')
 
             # 배당 재투자 계산 (고정값 사용)
             total_dividend = last_dividend * total_shares
@@ -147,7 +196,8 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
                 '구분': '예측'
             })
 
-            current_date += relativedelta(months=1)
+            # 날짜를 파악된 주기에 맞춰 증가
+            current_date += delta
 
     progress_bar.progress(100)
     status_text.text("✅ 계산 완료!")
@@ -167,9 +217,10 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
         'remaining_cash': round(accumulated_dividends, 2),
         'dataframe': df,
         'prediction_assumptions': {
-            'monthly_dividend': round(last_dividend, 4),
+            'dividend_per_payment': round(last_dividend, 4),
             'fixed_price': round(current_price, 2),
-            'dividend_frequency': '매월 말일'
+            'dividend_frequency': dividend_frequency_desc,
+            'avg_interval_days': round(avg_interval_days, 0) if len(dividend_dates) > 1 else None
         },
         'initial_shares': initial_shares
     }
@@ -189,10 +240,12 @@ def main():
         - 한국 ETF: 284430.KS (KODEX 200)
         """)
         
-        st.markdown("## 📊 예측 방법")
+        st.markdown("## 📊 개선된 예측 방법")
         st.write("""
+        - **배당 주기 자동 감지**: 실제 배당 이력 분석
+        - **지원 주기**: 매월, 분기, 반기, 연간
         - **실제 데이터**: 야후 파이낸스 배당 기록
-        - **미래 예측**: 최근 배당금을 매월 반복
+        - **미래 예측**: 감지된 주기로 배당 반복
         - **주가**: 현재 주가로 고정
         """)
     
@@ -203,7 +256,7 @@ def main():
     with col1:
         ticker = st.text_input(
             "🎯 티커", 
-            placeholder="예: JEPQ",
+            placeholder="예: SCHD",
             help="종목 코드를 입력하세요"
         ).upper().strip()
 
@@ -292,9 +345,13 @@ def main():
             with col1:
                 st.info(f"📅 **배당 주기**\n{assumptions['dividend_frequency']}")
             with col2:
-                st.info(f"💰 **월 배당금**\n${assumptions['monthly_dividend']}")
+                st.info(f"💰 **배당금/회**\n${assumptions['dividend_per_payment']}")
             with col3:
                 st.info(f"📈 **고정 주가**\n${assumptions['fixed_price']}")
+            
+            # 추가 정보 (실제 간격이 있는 경우)
+            if assumptions['avg_interval_days'] is not None:
+                st.markdown(f"**📊 실제 배당 간격 분석**: 평균 {assumptions['avg_interval_days']:.0f}일")
             
             # 차트 생성
             df = result['dataframe']
@@ -309,7 +366,7 @@ def main():
                     x='날짜_dt', 
                     y='총보유주식',
                     color='구분',
-                    title=f"{ticker} 배당 재투자 시뮬레이션",
+                    title=f"{ticker} 배당 재투자 시뮬레이션 ({assumptions['dividend_frequency']})",
                     labels={
                         '날짜_dt': '날짜',
                         '총보유주식': '총 보유 주식 (주)',
