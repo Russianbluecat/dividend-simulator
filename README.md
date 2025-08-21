@@ -22,12 +22,6 @@
 
 ## 📸 스크린샷
 
-### 메인 화면
-![메인화면](https://user-images.githubusercontent.com/placeholder/main-screen.png)
-
-### 결과 화면
-![결과화면](https://user-images.githubusercontent.com/placeholder/result-screen.png)
-
 ## 🛠 로컬 설치 및 실행
 
 ### 요구사항
