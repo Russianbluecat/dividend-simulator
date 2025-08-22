@@ -5,7 +5,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-import requests
 import time
 
 # 페이지 설정
@@ -47,13 +46,8 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
 
     # 종목 데이터 가져오기
     try:
-        # 타임아웃 설정 (30초)
-        session = requests.Session()
-        session.request = lambda *args, **kwargs: requests.Session.request(
-            session, *args, timeout=30, **kwargs
-        )
-        
-        stock = yf.Ticker(ticker, session=session)
+        # yfinance 기본 세션 사용 (custom session 제거)
+        stock = yf.Ticker(ticker)
         dividends = stock.dividends
         actual_end = min(today, end_date_obj).strftime('%Y-%m-%d')
         actual_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= actual_end)]
@@ -64,16 +58,6 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
         progress_bar.progress(40)
         status_text.text("💰 배당 데이터 분석 중...")
         
-    except requests.exceptions.Timeout:
-        progress_bar.empty()
-        status_text.empty()
-        st.error("⏰ 서버 응답이 너무 느립니다. 잠시 후 다시 시도해주세요.")
-        return None
-    except requests.exceptions.ConnectionError:
-        progress_bar.empty()
-        status_text.empty()
-        st.error("🌐 인터넷 연결을 확인해주세요.")
-        return None
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
@@ -279,7 +263,6 @@ def main():
         - **실제 데이터**: 야후 파이낸스 배당 기록
         - **미래 예측**: 감지된 주기로 배당 반복
         - **주가**: 현재 주가로 고정
-        - **타임아웃**: 30초 응답 대기
         """)
         
         st.markdown("## 📱 모바일 최적화")
@@ -472,4 +455,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
