@@ -8,6 +8,8 @@ from dateutil.relativedelta import relativedelta
 import time
 import json
 import os
+from typing import Dict, List, Optional, Tuple, Any
+import requests
 
 # 페이지 설정
 st.set_page_config(
@@ -16,6 +18,405 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+class ValidationError(Exception):
+    """사용자 입력 검증 오류"""
+    pass
+
+class DataFetchError(Exception):
+    """데이터 가져오기 오류"""
+    pass
+
+def validate_inputs(ticker: str, start_date: datetime.date, end_date: datetime.date, initial_shares: int) -> List[str]:
+    """
+    사용자 입력값 검증
+    
+    Returns:
+        List[str]: 오류 메시지 리스트 (비어있으면 모든 입력이 유효함)
+    """
+    errors = []
+    
+    # 티커 검증
+    if not ticker or len(ticker.strip()) == 0:
+        errors.append("❌ 티커를 입력해주세요")
+    elif len(ticker.strip()) > 10:
+        errors.append("❌ 티커는 10자 이하여야 합니다")
+    elif not ticker.replace('.', '').replace('-', '').isalnum():
+        errors.append("❌ 티커는 영문, 숫자, '.', '-'만 포함할 수 있습니다")
+    
+    # 날짜 검증
+    if end_date <= start_date:
+        errors.append("❌ 종료일자가 시작일자보다 이후여야 합니다")
+    
+    # 기간이 너무 짧은 경우
+    if (end_date - start_date).days < 30:
+        errors.append("⚠️ 시뮬레이션 기간이 30일 미만입니다. 더 긴 기간을 권장합니다")
+    
+    # 미래 날짜가 너무 먼 경우
+    today = datetime.now().date()
+    if end_date > today + timedelta(days=3650):  # 10년 후
+        errors.append("⚠️ 종료일자가 너무 먼 미래입니다 (최대 10년)")
+    
+    # 초기 보유 주식 검증
+    if initial_shares <= 0:
+        errors.append("❌ 초기 보유 수량은 1 이상이어야 합니다")
+    elif initial_shares > 1000000:
+        errors.append("⚠️ 초기 보유 수량이 너무 큽니다 (최대 100만주)")
+    
+    return errors
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5분 캐시
+def fetch_stock_data(ticker: str, start_date: str, end_date: str) -> Tuple[pd.Series, pd.DataFrame]:
+    """
+    주식 데이터 가져오기 (배당금 및 가격 데이터)
+    
+    Args:
+        ticker: 주식 티커
+        start_date: 시작일 (YYYY-MM-DD)
+        end_date: 종료일 (YYYY-MM-DD)
+        
+    Returns:
+        Tuple[pd.Series, pd.DataFrame]: (배당금 데이터, 가격 데이터)
+        
+    Raises:
+        DataFetchError: 데이터 가져오기 실패시
+    """
+    try:
+        # 네트워크 타임아웃 설정
+        stock = yf.Ticker(ticker)
+        
+        # 기본 정보 확인 (티커 유효성 검사)
+        info = stock.info
+        if not info or len(info) < 5:  # 기본 정보가 너무 적으면 유효하지 않은 티커
+            raise DataFetchError(f"'{ticker}'는 유효하지 않은 티커입니다.")
+        
+        # 배당금 데이터 가져오기
+        dividends = stock.dividends
+        if dividends.empty:
+            raise DataFetchError(f"'{ticker}'의 배당금 데이터를 찾을 수 없습니다.")
+        
+        # 가격 데이터 가져오기
+        today = datetime.now().date()
+        actual_end = min(today, datetime.strptime(end_date, '%Y-%m-%d').date()).strftime('%Y-%m-%d')
+        
+        price_data = stock.history(start=start_date, end=actual_end)
+        if price_data.empty:
+            raise DataFetchError(f"'{ticker}'의 가격 데이터를 찾을 수 없습니다.")
+        
+        return dividends, price_data
+        
+    except requests.exceptions.RequestException:
+        raise DataFetchError("네트워크 연결을 확인해주세요. 인터넷 연결이 불안정합니다.")
+    except Exception as e:
+        if "invalid" in str(e).lower() or "not found" in str(e).lower():
+            raise DataFetchError(f"'{ticker}'는 존재하지 않는 티커입니다. 올바른 티커를 입력해주세요.")
+        else:
+            raise DataFetchError(f"데이터 조회 중 오류가 발생했습니다: {str(e)}")
+
+def analyze_dividend_frequency(dividend_dates: pd.DatetimeIndex) -> Tuple[str, str, relativedelta, float]:
+    """
+    배당 주기 분석
+    
+    Args:
+        dividend_dates: 배당금 지급일 인덱스
+        
+    Returns:
+        Tuple[str, str, relativedelta, float]: (주기 단위, 설명, 델타, 평균 간격일)
+    """
+    if len(dividend_dates) <= 1:
+        return '매월', '매월 (기본값)', relativedelta(months=1), 30.0
+    
+    # 날짜 간의 평균 간격 계산
+    intervals = []
+    for i in range(1, len(dividend_dates)):
+        interval = (dividend_dates[i] - dividend_dates[i-1]).days
+        intervals.append(interval)
+    
+    avg_interval_days = sum(intervals) / len(intervals)
+    
+    # 배당 주기 판단
+    if 25 <= avg_interval_days <= 35:
+        return '매월', '매월', relativedelta(months=1), avg_interval_days
+    elif 80 <= avg_interval_days <= 100:
+        return '분기', '분기별 (3개월)', relativedelta(months=3), avg_interval_days
+    elif 170 <= avg_interval_days <= 200:
+        return '반기', '반기별 (6개월)', relativedelta(months=6), avg_interval_days
+    elif 350 <= avg_interval_days <= 380:
+        return '연간', '연간 (12개월)', relativedelta(years=1), avg_interval_days
+    else:
+        # 기타 경우 (격월, 불규칙 등)
+        return '매월', f'매월 (실제 간격: {avg_interval_days:.0f}일)', relativedelta(months=1), avg_interval_days
+
+def find_nearest_price(target_date: pd.Timestamp, price_data: pd.DataFrame, max_days: int = 5) -> Optional[float]:
+    """
+    특정 날짜에 가장 가까운 주가 찾기
+    
+    Args:
+        target_date: 목표 날짜
+        price_data: 가격 데이터
+        max_days: 최대 검색 일수
+        
+    Returns:
+        Optional[float]: 찾은 주가 또는 None
+    """
+    price_dates = set(price_data.index)
+    
+    # 정확한 날짜부터 시작해서 앞뒤로 검색
+    for i in range(max_days + 1):
+        # 당일 또는 이후 날짜 확인
+        if i == 0:
+            check_date = target_date
+        else:
+            check_date = target_date + timedelta(days=i)
+        
+        if check_date in price_dates:
+            return price_data.loc[check_date, 'Close']
+            
+        # 이전 날짜 확인
+        if i > 0:
+            check_date = target_date - timedelta(days=i)
+            if check_date in price_dates:
+                return price_data.loc[check_date, 'Close']
+    
+    return None
+
+def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame, initial_shares: float) -> Tuple[float, float, List[Dict]]:
+    """
+    실제 배당 데이터를 기반으로 재투자 계산
+    
+    Args:
+        dividends: 배당금 데이터
+        price_data: 가격 데이터  
+        initial_shares: 초기 보유 주식 수
+        
+    Returns:
+        Tuple[float, float, List[Dict]]: (총 주식 수, 누적 현금, 재투자 상세내역)
+    """
+    total_shares = float(initial_shares)
+    accumulated_dividends = 0.0
+    reinvestment_details = []
+    
+    # 통화 정보
+    currency_symbol, _ = get_currency_info(dividends.index[0].strftime('%Y-%m-%d'))
+    
+    for div_date, dividend_per_share in dividends.items():
+        div_date_str = div_date.strftime('%Y-%m-%d')
+        
+        # 해당 날짜 주가 찾기
+        price_on_date = find_nearest_price(div_date, price_data)
+        if price_on_date is None:
+            continue
+            
+        # 배당 재투자 계산
+        total_dividend = dividend_per_share * total_shares
+        accumulated_dividends += total_dividend
+        new_shares = int(accumulated_dividends // price_on_date)
+        
+        if new_shares >= 1:
+            accumulated_dividends -= new_shares * price_on_date
+            total_shares += new_shares
+        
+        reinvestment_details.append({
+            '날짜': div_date_str,
+            f'주당배당({currency_symbol})': round(dividend_per_share, 4),
+            '보유주식': round(total_shares - new_shares, 0),
+            f'총배당금({currency_symbol})': round(total_dividend, 2),
+            f'누적현금({currency_symbol})': round(accumulated_dividends, 2),
+            f'주가({currency_symbol})': round(price_on_date, 2),
+            '신규매수': int(new_shares),
+            '총보유주식': round(total_shares, 0),
+            '구분': '실제'
+        })
+    
+    return total_shares, accumulated_dividends, reinvestment_details
+
+def calculate_future_forecast(end_date_str: str, dividend_frequency: str, delta: relativedelta,
+                            last_dividend: float, current_price: float, total_shares: float,
+                            accumulated_dividends: float, dividend_dates: pd.DatetimeIndex) -> Tuple[float, float, List[Dict]]:
+    """
+    미래 배당 예측 계산
+    
+    Args:
+        end_date_str: 종료 날짜 문자열
+        dividend_frequency: 배당 주기
+        delta: 날짜 증가 단위
+        last_dividend: 마지막 배당금
+        current_price: 현재 주가
+        total_shares: 현재 보유 주식 수
+        accumulated_dividends: 누적 현금
+        dividend_dates: 기존 배당일들
+        
+    Returns:
+        Tuple[float, float, List[Dict]]: (최종 주식 수, 최종 누적 현금, 예측 상세내역)
+    """
+    today = datetime.now().date()
+    end_date_obj = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    
+    if end_date_obj <= today:
+        return total_shares, accumulated_dividends, []
+    
+    forecast_details = []
+    currency_symbol, _ = get_currency_info(end_date_str)
+    
+    # 다음 배당일 계산
+    if len(dividend_dates) > 0:
+        last_dividend_date = dividend_dates[-1].date()
+        next_dividend_date = last_dividend_date
+        
+        # 다음 배당일까지 주기만큼 더하기
+        while next_dividend_date <= today:
+            next_dividend_date = next_dividend_date + delta
+    else:
+        next_dividend_date = today + delta
+    
+    current_date = next_dividend_date
+    
+    while current_date <= end_date_obj:
+        div_date_str = current_date.strftime('%Y-%m-%d')
+        
+        # 배당 재투자 계산
+        total_dividend = last_dividend * total_shares
+        accumulated_dividends += total_dividend
+        new_shares = int(accumulated_dividends // current_price)
+        
+        if new_shares >= 1:
+            accumulated_dividends -= new_shares * current_price
+            total_shares += new_shares
+        
+        forecast_details.append({
+            '날짜': div_date_str,
+            f'주당배당({currency_symbol})': round(last_dividend, 4),
+            '보유주식': round(total_shares - new_shares, 0),
+            f'총배당금({currency_symbol})': round(total_dividend, 2),
+            f'누적현금({currency_symbol})': round(accumulated_dividends, 2),
+            f'주가({currency_symbol})': round(current_price, 2),
+            '신규매수': int(new_shares),
+            '총보유주식': round(total_shares, 0),
+            '구분': '예측'
+        })
+        
+        current_date += delta
+    
+    return total_shares, accumulated_dividends, forecast_details
+
+def simple_dividend_forecast(ticker: str, start_date: str, end_date: str, initial_shares: int = 1) -> Optional[Dict[str, Any]]:
+    """
+    배당 재투자 시뮬레이션 메인 함수 (리팩토링된 버전)
+    
+    Args:
+        ticker: 주식 티커
+        start_date: 시작일 (YYYY-MM-DD)
+        end_date: 종료일 (YYYY-MM-DD)  
+        initial_shares: 초기 보유 주식 수
+        
+    Returns:
+        Optional[Dict]: 시뮬레이션 결과 또는 None
+    """
+    # 통화 정보 설정
+    currency_symbol, currency_code = get_currency_info(ticker)
+    
+    # 진행 상황 표시
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    try:
+        # 1단계: 데이터 가져오기
+        status_text.text("📊 데이터를 가져오는 중...")
+        progress_bar.progress(20)
+        
+        dividends, price_data = fetch_stock_data(ticker, start_date, end_date)
+        
+        # 해당 기간의 실제 배당 데이터 필터링
+        today = datetime.now().date()
+        actual_end = min(today, datetime.strptime(end_date, '%Y-%m-%d').date()).strftime('%Y-%m-%d')
+        actual_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= actual_end)]
+        
+        if len(actual_dividends) == 0:
+            st.warning("⚠️ 해당 기간에 실제 배당 데이터가 없습니다.")
+            return None
+            
+        progress_bar.progress(40)
+        status_text.text("💰 배당 데이터 분석 중...")
+        
+        # 2단계: 배당 주기 분석
+        dividend_frequency_unit, dividend_frequency_desc, delta, avg_interval_days = analyze_dividend_frequency(actual_dividends.index)
+        
+        progress_bar.progress(60)
+        status_text.text("🔄 배당 재투자 계산 중...")
+        
+        # 3단계: 실제 데이터로 재투자 계산
+        total_shares, accumulated_dividends, actual_details = calculate_actual_reinvestment(
+            actual_dividends, price_data, initial_shares
+        )
+        
+        progress_bar.progress(80)
+        status_text.text("🔮 미래 예측 계산 중...")
+        
+        # 4단계: 미래 예측 계산
+        last_dividend = actual_dividends.iloc[-1]
+        current_price = price_data.iloc[-1]['Close']
+        
+        final_shares, final_cash, forecast_details = calculate_future_forecast(
+            end_date, dividend_frequency_unit, delta, last_dividend, current_price,
+            total_shares, accumulated_dividends, actual_dividends.index
+        )
+        
+        progress_bar.progress(100)
+        status_text.text("✅ 계산 완료!")
+        
+        # 5단계: 결과 조합
+        all_details = actual_details + forecast_details
+        df = pd.DataFrame(all_details)
+        
+        result = {
+            'final_shares': int(final_shares),
+            'shares_gained': int(final_shares - initial_shares),
+            'remaining_cash': round(final_cash, 2),
+            'dataframe': df,
+            'prediction_assumptions': {
+                'dividend_per_payment': round(last_dividend, 4),
+                'fixed_price': round(current_price, 2),
+                'dividend_frequency': dividend_frequency_desc,
+                'avg_interval_days': round(avg_interval_days, 0) if len(actual_dividends.index) > 1 else None
+            },
+            'initial_shares': initial_shares
+        }
+        
+        # 잠시 후 진행바 제거
+        time.sleep(1)
+        progress_bar.empty()
+        status_text.empty()
+        
+        return result
+        
+    except DataFetchError as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(str(e))
+        
+        # 복구 방안 제시
+        st.markdown("### 💡 해결 방법:")
+        if "네트워크" in str(e):
+            st.info("📶 인터넷 연결을 확인하고 다시 시도해주세요.")
+        elif "유효하지 않은" in str(e) or "존재하지 않는" in str(e):
+            st.info("""
+            📝 **올바른 티커 입력 방법:**
+            - 미국 주식: AAPL, MSFT, GOOGL
+            - 미국 ETF: SPY, QQQ, SCHD, JEPQ
+            - 한국 주식: 005930.KS (삼성전자)
+            - 한국 ETF: 284430.KS (KODEX 200)
+            """)
+        elif "배당금 데이터" in str(e):
+            st.info("💰 해당 종목은 배당을 지급하지 않거나 배당 이력이 없습니다. 다른 배당주를 시도해보세요.")
+        
+        return None
+        
+    except Exception as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"❌ 예상치 못한 오류가 발생했습니다: {str(e)}")
+        st.info("🔄 다시 시도해주세요. 문제가 지속되면 다른 티커로 시도해보세요.")
+        return None
 
 def update_visitor_stats():
     """
@@ -112,222 +513,6 @@ def get_currency_info(ticker):
     else:
         return '$', 'USD'
 
-def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
-    """
-    심플한 배당 재투자 예측 계산기 (개선된 배당 주기 분석 버전)
-    """
-    
-    # 통화 정보 설정
-    currency_symbol, currency_code = get_currency_info(ticker)
-    
-    # 진행 상황 표시
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    
-    status_text.text("📊 데이터를 가져오는 중...")
-    progress_bar.progress(20)
-
-    # 현재 날짜
-    today = datetime.now().date()
-    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-
-    # 종목 데이터 가져오기
-    try:
-        # yfinance 기본 세션 사용 (custom session 제거)
-        stock = yf.Ticker(ticker)
-        dividends = stock.dividends
-        actual_end = min(today, end_date_obj).strftime('%Y-%m-%d')
-        actual_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= actual_end)]
-        
-        # 가격 데이터
-        price_data = stock.history(start=start_date, end=actual_end)
-        
-        progress_bar.progress(40)
-        status_text.text("💰 배당 데이터 분석 중...")
-        
-    except Exception as e:
-        progress_bar.empty()
-        status_text.empty()
-        st.error(f"❌ 데이터를 가져오는 중 오류 발생: {e}")
-        return None
-
-    if len(actual_dividends) == 0:
-        st.warning("⚠️ 해당 기간에 실제 배당 데이터가 없습니다.")
-        return None
-
-    if len(price_data) == 0:
-        st.error("❌ 주가 데이터를 찾을 수 없습니다.")
-        return None
-
-    # 예측을 위한 기준값
-    last_dividend = actual_dividends.iloc[-1]
-    current_price = price_data.iloc[-1]['Close']
-    
-    progress_bar.progress(60)
-    status_text.text("🔄 배당 재투자 계산 중...")
-
-    # 초기값 설정
-    total_shares = float(initial_shares)
-    accumulated_dividends = 0.0
-    reinvestment_details = []
-
-    # === 1단계: 실제 데이터로 계산 ===
-    for div_date, dividend_per_share in actual_dividends.items():
-        div_date_str = div_date.strftime('%Y-%m-%d')
-
-        # 해당 날짜 주가 찾기
-        price_on_date = None
-        for i in range(5):
-            check_date = div_date + timedelta(days=i)
-            if check_date in price_data.index:
-                price_on_date = price_data.loc[check_date, 'Close']
-                break
-            check_date = div_date - timedelta(days=i)
-            if check_date in price_data.index:
-                price_on_date = price_data.loc[check_date, 'Close']
-                break
-
-        if price_on_date is None:
-            continue
-
-        # 배당 재투자 계산
-        total_dividend = dividend_per_share * total_shares
-        accumulated_dividends += total_dividend
-        new_shares = accumulated_dividends // price_on_date
-
-        if new_shares >= 1:
-            accumulated_dividends -= new_shares * price_on_date
-            total_shares += new_shares
-
-        reinvestment_details.append({
-            '날짜': div_date_str,
-            f'주당배당({currency_symbol})': round(dividend_per_share, 4),
-            '보유주식': round(total_shares - new_shares, 0),
-            f'총배당금({currency_symbol})': round(total_dividend, 2),
-            f'누적현금({currency_symbol})': round(accumulated_dividends, 2),
-            f'주가({currency_symbol})': round(price_on_date, 2),
-            '신규매수': int(new_shares),
-            '총보유주식': round(total_shares, 0),
-            '구분': '실제'
-        })
-
-    progress_bar.progress(80)
-    status_text.text("🔮 미래 예측 계산 중...")
-
-    # === 배당 주기 분석 로직 ===
-    dividend_dates = actual_dividends.index
-    
-    if len(dividend_dates) > 1:
-        # 날짜 간의 평균 간격 계산
-        intervals = []
-        for i in range(1, len(dividend_dates)):
-            interval = (dividend_dates[i] - dividend_dates[i-1]).days
-            intervals.append(interval)
-        
-        avg_interval_days = sum(intervals) / len(intervals)
-        
-        # 배당 주기 판단
-        if 25 <= avg_interval_days <= 35:
-            dividend_frequency_unit = '매월'
-            dividend_frequency_desc = '매월'
-            delta = relativedelta(months=1)
-        elif 80 <= avg_interval_days <= 100:
-            dividend_frequency_unit = '분기'
-            dividend_frequency_desc = '분기별 (3개월)'
-            delta = relativedelta(months=3)
-        elif 170 <= avg_interval_days <= 200:
-            dividend_frequency_unit = '반기'
-            dividend_frequency_desc = '반기별 (6개월)'
-            delta = relativedelta(months=6)
-        elif 350 <= avg_interval_days <= 380:
-            dividend_frequency_unit = '연간'
-            dividend_frequency_desc = '연간 (12개월)'
-            delta = relativedelta(years=1)
-        else:
-            # 그 외 대부분의 경우 (월, 격월 등)
-            dividend_frequency_unit = '매월'
-            dividend_frequency_desc = f'매월 (실제 간격: {avg_interval_days:.0f}일)'
-            delta = relativedelta(months=1)
-    else:
-        # 배당 데이터가 1개 이하일 경우 기본값으로 월간 설정
-        dividend_frequency_unit = '매월'
-        dividend_frequency_desc = '매월 (기본값)'
-        delta = relativedelta(months=1)
-        avg_interval_days = 30
-
-    # === 2단계: 미래 예측 ===
-    if end_date_obj > today:
-        # 마지막 배당일 기준으로 다음 배당일 계산
-        if len(dividend_dates) > 0:
-            last_dividend_date = dividend_dates[-1].date()
-            next_dividend_date = last_dividend_date
-            # 다음 배당일까지 주기만큼 더하기
-            while next_dividend_date <= today:
-                if dividend_frequency_unit == '연간':
-                    next_dividend_date = next_dividend_date + relativedelta(years=1)
-                elif dividend_frequency_unit == '반기':
-                    next_dividend_date = next_dividend_date + relativedelta(months=6)
-                elif dividend_frequency_unit == '분기':
-                    next_dividend_date = next_dividend_date + relativedelta(months=3)
-                else:  # 매월
-                    next_dividend_date = next_dividend_date + relativedelta(months=1)
-        else:
-            next_dividend_date = today + delta
-
-        current_date = next_dividend_date
-        
-        while current_date <= end_date_obj:
-            div_date_str = current_date.strftime('%Y-%m-%d')
-
-            # 배당 재투자 계산 (고정값 사용)
-            total_dividend = last_dividend * total_shares
-            accumulated_dividends += total_dividend
-            new_shares = accumulated_dividends // current_price
-
-            if new_shares >= 1:
-                accumulated_dividends -= new_shares * current_price
-                total_shares += new_shares
-
-            reinvestment_details.append({
-                '날짜': div_date_str,
-                f'주당배당({currency_symbol})': round(last_dividend, 4),
-                '보유주식': round(total_shares - new_shares, 0),
-                f'총배당금({currency_symbol})': round(total_dividend, 2),
-                f'누적현금({currency_symbol})': round(accumulated_dividends, 2),
-                f'주가({currency_symbol})': round(current_price, 2),
-                '신규매수': int(new_shares),
-                '총보유주식': round(total_shares, 0),
-                '구분': '예측'
-            })
-
-            # 날짜를 파악된 주기에 맞춰 증가
-            current_date += delta
-
-    progress_bar.progress(100)
-    status_text.text("✅ 계산 완료!")
-    
-    # 잠시 후 진행바 제거
-    time.sleep(1)
-    progress_bar.empty()
-    status_text.empty()
-
-    # 데이터프레임 생성
-    df = pd.DataFrame(reinvestment_details)
-    
-    return {
-        'final_shares': int(total_shares),
-        'shares_gained': int(total_shares - initial_shares),
-        'remaining_cash': round(accumulated_dividends, 2),
-        'dataframe': df,
-        'prediction_assumptions': {
-            'dividend_per_payment': round(last_dividend, 4),
-            'fixed_price': round(current_price, 2),
-            'dividend_frequency': dividend_frequency_desc,
-            'avg_interval_days': round(avg_interval_days, 0) if len(dividend_dates) > 1 else None
-        },
-        'initial_shares': initial_shares
-    }
-
 # 메인 UI
 def main():
     st.title("📈 배당 재투자 시뮬레이터")
@@ -352,8 +537,13 @@ def main():
         - **주가**: 현재 주가로 고정
         """)
         
-        st.markdown("## 📱 모바일 최적화")
-        st.info("입력창이 2x2 그리드로 배치되어 모바일에서도 편리하게 사용할 수 있습니다.")
+        st.markdown("## 🔧 최근 업데이트")
+        st.success("""
+        ✅ **성능 최적화**: 데이터 캐싱 도입
+        ✅ **입력 검증**: 강화된 유효성 검사  
+        ✅ **에러 처리**: 구체적인 해결방안 제시
+        ✅ **코드 구조**: 함수 분리로 안정성 향상
+        """)
     
     # 입력 섹션 - 모바일 친화적 레이아웃
     st.markdown("---")
@@ -365,13 +555,15 @@ def main():
         ticker = st.text_input(
             "🎯 티커", 
             placeholder="예: SCHD",
-            help="종목 코드를 입력하세요"
+            help="종목 코드를 입력하세요",
+            max_chars=10
         ).upper().strip()
 
     with col1_2:
         initial_shares = st.number_input(
             "📦 초기 보유 수량", 
             min_value=1, 
+            max_value=1000000,
             value=100,
             help="처음에 보유한 주식 수"
         )
@@ -393,26 +585,35 @@ def main():
             help="시뮬레이션 종료 날짜"
         )
 
+    # 입력 검증
+    validation_errors = validate_inputs(ticker, start_date, end_date, initial_shares)
+    
+    # 오류 메시지 표시
+    if validation_errors:
+        for error in validation_errors:
+            if "❌" in error:
+                st.error(error)
+            else:
+                st.warning(error)
+    
     # 계산 버튼
     st.markdown("---")
     
-    if st.button("🚀 배당 재투자 시뮬레이션 시작", type="primary", use_container_width=True):
-        if not ticker:
-            st.error("❌ 티커를 입력해주세요!")
-            return
-            
-        if end_date <= start_date:
-            st.error("❌ 종료일자가 시작일자보다 이후여야 합니다!")
-            return
+    # 유효성 검사 통과시에만 버튼 활성화
+    button_disabled = any("❌" in error for error in validation_errors)
+    
+    if st.button("🚀 배당 재투자 시뮬레이션 시작", 
+                 type="primary", 
+                 use_container_width=True,
+                 disabled=button_disabled):
         
         # 계산 실행
-        with st.spinner("계산 중..."):
-            result = simple_dividend_forecast(
-                ticker=ticker,
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d'),
-                initial_shares=initial_shares
-            )
+        result = simple_dividend_forecast(
+            ticker=ticker,
+            start_date=start_date.strftime('%Y-%m-%d'),
+            end_date=end_date.strftime('%Y-%m-%d'),
+            initial_shares=initial_shares
+        )
         
         if result:
             # 통화 정보 가져오기
@@ -595,7 +796,44 @@ def main():
                     mime="text/csv"
                 )
     
-    # 🚀 방문자 통계 추가 (페이지 맨 하단)
+    # 예시 버튼들 (검증 오류가 있을 때만 표시)
+    if validation_errors and any("❌" in error for error in validation_errors):
+        st.markdown("---")
+        st.markdown("### 💡 예시로 시도해보기")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🇺🇸 SCHD ETF", type="secondary"):
+                st.session_state.example_ticker = "SCHD"
+                st.session_state.example_start = datetime(2023, 1, 1)
+                st.session_state.example_end = datetime(2025, 12, 31)
+                st.session_state.example_shares = 100
+                st.rerun()
+        
+        with col2:
+            if st.button("🇺🇸 JEPQ ETF", type="secondary"):
+                st.session_state.example_ticker = "JEPQ"
+                st.session_state.example_start = datetime(2023, 1, 1) 
+                st.session_state.example_end = datetime(2025, 12, 31)
+                st.session_state.example_shares = 100
+                st.rerun()
+        
+        with col3:
+            if st.button("🇰🇷 삼성전자", type="secondary"):
+                st.session_state.example_ticker = "005930.KS"
+                st.session_state.example_start = datetime(2023, 1, 1)
+                st.session_state.example_end = datetime(2025, 12, 31) 
+                st.session_state.example_shares = 10
+                st.rerun()
+    
+    # 예시 데이터로 자동 입력 (세션 상태에서)
+    if hasattr(st.session_state, 'example_ticker'):
+        st.info(f"✨ 예시 데이터가 입력되었습니다! 위의 값들을 확인하고 다시 시도해보세요.")
+        # 세션 상태 정리
+        del st.session_state.example_ticker
+    
+    # 방문자 통계 추가 (페이지 맨 하단)
     display_visitor_stats()
 
 if __name__ == "__main__":
