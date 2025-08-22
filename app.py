@@ -675,7 +675,7 @@ def main():
                 st.markdown("""
                 <div style='text-align: center; background-color: #e1f5fe; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #0288d1;'>
                     <h4 style='margin: 0; color: #01579b;'>📅 배당 주기</h4>
-                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}</p>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold; color: #01579b;'>{}</p>
                 </div>
                 """.format(assumptions['dividend_frequency']), unsafe_allow_html=True)
             with col2:
