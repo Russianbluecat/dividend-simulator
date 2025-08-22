@@ -370,11 +370,26 @@ def main():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                st.info(f"📅 **배당 주기**\n{assumptions['dividend_frequency']}")
+                st.markdown("""
+                <div style='text-align: center; background-color: #e1f5fe; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #0288d1;'>
+                    <h4 style='margin: 0; color: #01579b;'>📅 배당 주기</h4>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}</p>
+                </div>
+                """.format(assumptions['dividend_frequency']), unsafe_allow_html=True)
             with col2:
-                st.info(f"💰 **배당금/회**\n{currency_symbol}{assumptions['dividend_per_payment']}")
+                st.markdown("""
+                <div style='text-align: center; background-color: #e8f5e8; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #4caf50;'>
+                    <h4 style='margin: 0; color: #2e7d32;'>💰 배당금/회</h4>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}{}</p>
+                </div>
+                """.format(currency_symbol, assumptions['dividend_per_payment']), unsafe_allow_html=True)
             with col3:
-                st.info(f"📈 **고정 주가**\n{currency_symbol}{assumptions['fixed_price']}")
+                st.markdown("""
+                <div style='text-align: center; background-color: #fff3e0; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #ff9800;'>
+                    <h4 style='margin: 0; color: #f57c00;'>📈 고정 주가</h4>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}{}</p>
+                </div>
+                """.format(currency_symbol, assumptions['fixed_price']), unsafe_allow_html=True)
             
             # 추가 정보 (실제 간격이 있는 경우)
             if assumptions['avg_interval_days'] is not None:
@@ -434,12 +449,35 @@ def main():
                 if '날짜_dt' in filtered_df.columns:
                     filtered_df = filtered_df.drop('날짜_dt', axis=1)
                 
-                # 숫자 형식 지정하여 표시
+                # 숫자 형식 지정 및 표시용 데이터프레임 생성
                 display_df = filtered_df.copy()
-                display_df = display_df.round(2)
+                
+                # 숫자 컬럼들에 천의 자리 쉼표 적용
+                numeric_columns = ['보유주식', '신규매수', '총보유주식']
+                currency_columns = [col for col in display_df.columns if currency_symbol in col]
+                
+                for col in numeric_columns:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "")
+                
+                for col in currency_columns:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(lambda x: f"{x:,.2f}" if pd.notna(x) else "")
+                
+                # 스타일링된 데이터프레임 표시
+                styled_df = display_df.style.set_table_styles([
+                    # 날짜와 구분 컬럼 가운데 정렬
+                    {'selector': 'td:nth-child(1)', 'props': [('text-align', 'center')]},  # 날짜
+                    {'selector': 'td:nth-child(9)', 'props': [('text-align', 'center')]},  # 구분 (마지막 컬럼)
+                    # 헤더 스타일
+                    {'selector': 'th', 'props': [('background-color', '#f0f2f6'), ('font-weight', 'bold')]},
+                    # 전체 테이블 스타일
+                    {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]},
+                    {'selector': 'td, th', 'props': [('border', '1px solid #ddd'), ('padding', '8px')]}
+                ])
                 
                 st.dataframe(
-                    display_df,
+                    styled_df,
                     use_container_width=True,
                     height=400
                 )
