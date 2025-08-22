@@ -483,6 +483,9 @@ def main():
                     # 날짜와 구분 컬럼 가운데 정렬
                     {'selector': 'td:nth-child(1)', 'props': [('text-align', 'center')]},  # 날짜
                     {'selector': 'td:nth-child(9)', 'props': [('text-align', 'center')]},  # 구분 (마지막 컬럼)
+                    # 헤더도 가운데 정렬
+                    {'selector': 'th:nth-child(1)', 'props': [('text-align', 'center')]},  # 날짜 헤더
+                    {'selector': 'th:nth-child(9)', 'props': [('text-align', 'center')]},  # 구분 헤더
                     # 헤더 스타일
                     {'selector': 'th', 'props': [('background-color', '#f0f2f6'), ('font-weight', 'bold')]},
                     # 전체 테이블 스타일
