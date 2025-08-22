@@ -682,14 +682,14 @@ def main():
                 st.markdown("""
                 <div style='text-align: center; background-color: #e8f5e8; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #4caf50;'>
                     <h4 style='margin: 0; color: #2e7d32;'>💰 배당금/회</h4>
-                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}{}</p>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;color: #2e7d32;'>{}{}</p>
                 </div>
                 """.format(currency_symbol, assumptions['dividend_per_payment']), unsafe_allow_html=True)
             with col3:
                 st.markdown("""
                 <div style='text-align: center; background-color: #fff3e0; padding: 1rem; border-radius: 0.5rem; border-left: 5px solid #ff9800;'>
                     <h4 style='margin: 0; color: #f57c00;'>📈 고정 주가</h4>
-                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;'>{}{}</p>
+                    <p style='margin: 0.5rem 0 0 0; font-size: 1.1rem; font-weight: bold;color: #f57c00;'>{}{}</p>
                 </div>
                 """.format(currency_symbol, assumptions['fixed_price']), unsafe_allow_html=True)
             
