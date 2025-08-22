@@ -336,7 +336,28 @@ def main():
             
             # 메트릭 표시
             st.markdown("## 📊 결과 요약")
-            col1, col2, col3, col4 = st.columns(4)
+            
+            # 최종 보유 주식 수를 크게 강조
+            st.markdown("""
+            <div style='text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 2rem; margin: 1rem 0; border-radius: 15px; 
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.2);'>
+                <h2 style='color: white; margin: 0; font-size: 1.5rem; font-weight: 300;'>🎯 최종 보유 주식</h2>
+                <h1 style='color: #FFD700; margin: 0.5rem 0; font-size: 4rem; font-weight: bold; 
+                           text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>{:,}주</h1>
+                <p style='color: #E8F4FD; margin: 0; font-size: 1.2rem; font-weight: 500;'>
+                    💎 초기 대비 <span style='color: #FFD700; font-weight: bold;'>+{:,}주</span> 증가 
+                    (<span style='color: #00E676; font-weight: bold;'>+{:.1f}%</span>)
+                </p>
+            </div>
+            """.format(
+                result['final_shares'], 
+                result['shares_gained'], 
+                (result['shares_gained'] / result['initial_shares']) * 100
+            ), unsafe_allow_html=True)
+            
+            # 나머지 메트릭들
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 st.metric(
@@ -345,20 +366,13 @@ def main():
                 )
             
             with col2:
-                st.metric(
-                    "최종 보유", 
-                    f"{result['final_shares']:,}주",
-                    delta=f"+{result['shares_gained']:,}주"
-                )
-            
-            with col3:
                 increase_rate = (result['shares_gained'] / result['initial_shares']) * 100
                 st.metric(
                     "증가율", 
                     f"{increase_rate:.1f}%"
                 )
             
-            with col4:
+            with col3:
                 st.metric(
                     "잔여 현금", 
                     f"{currency_symbol}{result['remaining_cash']:,.2f}"
