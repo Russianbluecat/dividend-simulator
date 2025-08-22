@@ -2,8 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+import requests
 import time
 
 # 페이지 설정
@@ -45,7 +47,13 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
 
     # 종목 데이터 가져오기
     try:
-        stock = yf.Ticker(ticker)
+        # 타임아웃 설정 (30초)
+        session = requests.Session()
+        session.request = lambda *args, **kwargs: requests.Session.request(
+            session, *args, timeout=30, **kwargs
+        )
+        
+        stock = yf.Ticker(ticker, session=session)
         dividends = stock.dividends
         actual_end = min(today, end_date_obj).strftime('%Y-%m-%d')
         actual_dividends = dividends[(dividends.index >= start_date) & (dividends.index <= actual_end)]
@@ -56,7 +64,19 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
         progress_bar.progress(40)
         status_text.text("💰 배당 데이터 분석 중...")
         
+    except requests.exceptions.Timeout:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("⏰ 서버 응답이 너무 느립니다. 잠시 후 다시 시도해주세요.")
+        return None
+    except requests.exceptions.ConnectionError:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("🌐 인터넷 연결을 확인해주세요.")
+        return None
     except Exception as e:
+        progress_bar.empty()
+        status_text.empty()
         st.error(f"❌ 데이터를 가져오는 중 오류 발생: {e}")
         return None
 
@@ -123,7 +143,7 @@ def simple_dividend_forecast(ticker, start_date, end_date, initial_shares=1):
     progress_bar.progress(80)
     status_text.text("🔮 미래 예측 계산 중...")
 
-    # === 💡 핵심 수정 부분: 배당 주기 분석 로직 추가 ===
+    # === 배당 주기 분석 로직 ===
     dividend_dates = actual_dividends.index
     
     if len(dividend_dates) > 1:
@@ -259,39 +279,48 @@ def main():
         - **실제 데이터**: 야후 파이낸스 배당 기록
         - **미래 예측**: 감지된 주기로 배당 반복
         - **주가**: 현재 주가로 고정
+        - **타임아웃**: 30초 응답 대기
         """)
+        
+        st.markdown("## 📱 모바일 최적화")
+        st.info("입력창이 2x2 그리드로 배치되어 모바일에서도 편리하게 사용할 수 있습니다.")
     
-    # 입력 섹션
+    # 입력 섹션 - 모바일 친화적 레이아웃
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
+    
+    # 첫 번째 행: 티커와 초기 보유 수량
+    col1_1, col1_2 = st.columns(2)
+    
+    with col1_1:
         ticker = st.text_input(
             "🎯 티커", 
             placeholder="예: SCHD",
             help="종목 코드를 입력하세요"
         ).upper().strip()
 
-    with col2:
+    with col1_2:
+        initial_shares = st.number_input(
+            "📦 초기 보유 수량", 
+            min_value=1, 
+            value=100,
+            help="처음에 보유한 주식 수"
+        )
+    
+    # 두 번째 행: 시작일자와 종료일자
+    col2_1, col2_2 = st.columns(2)
+    
+    with col2_1:
         start_date = st.date_input(
             "📅 시작일자", 
             value=datetime(2025, 1, 1),
             help="시뮬레이션 시작 날짜"
         )
 
-    with col3:
+    with col2_2:
         end_date = st.date_input(
             "📅 종료일자", 
             value=datetime(2026, 12, 31),
             help="시뮬레이션 종료 날짜"
-        )
-
-    with col4:
-        initial_shares = st.number_input(
-            "📦 초기 보유 수량", 
-            min_value=1, 
-            value=100,
-            help="처음에 보유한 주식 수"
         )
 
     # 계산 버튼
@@ -443,5 +472,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
