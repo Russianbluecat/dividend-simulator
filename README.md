@@ -105,7 +105,7 @@ mypy streamlit_app.py
 
 이 프로젝트는 MIT 라이선스를 따릅니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-## ⚠️ 면책 조항
+## ⚠️ 주의
 
 이 시뮬레이터는 교육 및 참고 목적으로만 제공됩니다. 실제 투자 결정에 사용하기 전에 반드시 전문가와 상담하시기 바랍니다. 
 
@@ -124,17 +124,15 @@ mypy streamlit_app.py
 ## 📈 향후 계획
 
 - [ ] 포트폴리오 분석 (여러 종목 동시)
-- [ ] 세금 계산 기능
 - [ ] 배당 성장률 고려한 예측
 - [ ] 수익률 비교 분석
-- [ ] 이메일 알림 기능
 - [ ] 다국어 지원
 
 ## 👨‍💻 개발자
 
 **Your Name**
 - GitHub: [@yourusername](https://github.com/yourusername)
-- Email: your.email@example.com
+- Email: ss3007@naver.com
 
 ## 🙏 감사의 말
 
