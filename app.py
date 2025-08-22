@@ -796,42 +796,7 @@ def main():
                     mime="text/csv"
                 )
     
-    # 예시 버튼들 (검증 오류가 있을 때만 표시)
-    if validation_errors and any("❌" in error for error in validation_errors):
-        st.markdown("---")
-        st.markdown("### 💡 예시로 시도해보기")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("🇺🇸 SCHD ETF", type="secondary"):
-                st.session_state.example_ticker = "SCHD"
-                st.session_state.example_start = datetime(2023, 1, 1)
-                st.session_state.example_end = datetime(2025, 12, 31)
-                st.session_state.example_shares = 100
-                st.rerun()
-        
-        with col2:
-            if st.button("🇺🇸 JEPQ ETF", type="secondary"):
-                st.session_state.example_ticker = "JEPQ"
-                st.session_state.example_start = datetime(2023, 1, 1) 
-                st.session_state.example_end = datetime(2025, 12, 31)
-                st.session_state.example_shares = 100
-                st.rerun()
-        
-        with col3:
-            if st.button("🇰🇷 삼성전자", type="secondary"):
-                st.session_state.example_ticker = "005930.KS"
-                st.session_state.example_start = datetime(2023, 1, 1)
-                st.session_state.example_end = datetime(2025, 12, 31) 
-                st.session_state.example_shares = 10
-                st.rerun()
-    
-    # 예시 데이터로 자동 입력 (세션 상태에서)
-    if hasattr(st.session_state, 'example_ticker'):
-        st.info(f"✨ 예시 데이터가 입력되었습니다! 위의 값들을 확인하고 다시 시도해보세요.")
-        # 세션 상태 정리
-        del st.session_state.example_ticker
+ 
     
     # 방문자 통계 추가 (페이지 맨 하단)
     display_visitor_stats()
