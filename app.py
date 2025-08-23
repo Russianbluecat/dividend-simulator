@@ -418,90 +418,6 @@ def simple_dividend_forecast(ticker: str, start_date: str, end_date: str, initia
         st.info("🔄 다시 시도해주세요. 문제가 지속되면 다른 티커로 시도해보세요.")
         return None
 
-def update_visitor_stats():
-    """
-    방문자 통계 업데이트 - 영구 저장됨!
-    """
-    stats_file = "visitor_stats.json"
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    try:
-        # 기존 통계 파일 로드
-        if os.path.exists(stats_file):
-            with open(stats_file, 'r', encoding='utf-8') as f:
-                stats = json.load(f)
-        else:
-            # 첫 실행시 초기값
-            stats = {
-                "total_visitors": 0, 
-                "daily_visitors": {},
-                "first_visit_date": today
-            }
-        
-        # 세션별 중복 방문 방지 (브라우저 세션 기준)
-        if "visited_today" not in st.session_state:
-            st.session_state.visited_today = True
-            
-            # 총 방문자 수 증가 (영구 저장!)
-            stats["total_visitors"] += 1
-            
-            # 오늘 방문자 수 증가
-            if today not in stats["daily_visitors"]:
-                stats["daily_visitors"][today] = 0
-            stats["daily_visitors"][today] += 1
-            
-            # 파일에 영구 저장
-            with open(stats_file, 'w', encoding='utf-8') as f:
-                json.dump(stats, f, ensure_ascii=False, indent=2)
-        
-        # 오늘 방문자 수 반환
-        today_visitors = stats["daily_visitors"].get(today, 0)
-        total_visitors = stats["total_visitors"]
-        
-        return total_visitors, today_visitors, stats.get("first_visit_date", today)
-        
-    except Exception as e:
-        # 오류 발생시 기본값 반환 (에러 메시지는 숨김)
-        return 0, 0, today
-
-def display_visitor_stats():
-    """
-    방문자 통계를 예쁘게 화면 하단에 표시
-    """
-    total, today, first_date = update_visitor_stats()
-    
-    st.markdown("---")
-    st.markdown("### 📊 방문자 통계")
-    
-    # 3개 컬럼으로 통계 표시
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div style='text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    padding: 1.5rem; border-radius: 10px; color: white;'>
-            <h3 style='margin: 0; font-size: 1rem;'>👥 누적 방문자</h3>
-            <h2 style='margin: 0.5rem 0 0 0; font-size: 2rem; color: #FFD700;'>{:,}명</h2>
-        </div>
-        """.format(total), unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div style='text-align: center; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-                    padding: 1.5rem; border-radius: 10px; color: white;'>
-            <h3 style='margin: 0; font-size: 1rem;'>📅 오늘 방문자</h3>
-            <h2 style='margin: 0.5rem 0 0 0; font-size: 2rem; color: #FFE4E6;'>{:,}명</h2>
-        </div>
-        """.format(today), unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div style='text-align: center; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
-                    padding: 1.5rem; border-radius: 10px; color: white;'>
-            <h3 style='margin: 0; font-size: 1rem;'>🚀 서비스 시작</h3>
-            <h2 style='margin: 0.5rem 0 0 0; font-size: 1.5rem; color: #E1F9FE;'>{}</h2>
-        </div>
-        """.format(first_date), unsafe_allow_html=True)
 
 def get_currency_info(ticker):
     """
@@ -798,8 +714,7 @@ def main():
     
  
     
-    # 방문자 통계 추가 (페이지 맨 하단)
-    display_visitor_stats()
+   
 
 if __name__ == "__main__":
     main()
