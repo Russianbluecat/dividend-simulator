@@ -458,17 +458,12 @@ def main():
         
         st.markdown("## 🔧 최근 업데이트")
         st.success("""
-        ✅ **성능 최적화**: <br>
-        &nbsp;&nbsp;&nbsp;&nbsp;데이터 캐싱 도입<br><br>
-        ✅ **입력 검증**: <br>
-        &nbsp;&nbsp;&nbsp;&nbsp;강화된 유효성 검사<br><br>  
-        ✅ **에러 처리**: <br>
-        &nbsp;&nbsp;&nbsp;&nbsp;구체적인 해결방안 제시<br><br>
-        ✅ **코드 구조**: <br>
-        &nbsp;&nbsp;&nbsp;&nbsp;함수 분리로 안정성 향상<br><br>
-        ✅ **통화 표시**: <br>
-        &nbsp;&nbsp;&nbsp;&nbsp;한국 주식 원화 표시 수정
-        """, unsafe_allow_html=True)
+        ✅ 성능 최적화: 데이터 캐싱 도입
+        ✅ 입력 검증: 강화된 유효성 검사  
+        ✅ 에러 처리: 구체적인 해결방안 제시
+        ✅ 코드 구조: 함수 분리로 안정성 향상
+        ✅ 통화 표시: 한국 주식 원화 표시 수정
+        """)
     
     # 입력 섹션 - 모바일 친화적 레이아웃
     st.markdown("---")
