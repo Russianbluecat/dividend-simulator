@@ -180,7 +180,7 @@ def find_nearest_price(target_date: pd.Timestamp, price_data: pd.DataFrame, max_
     
     return None
 
-def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame, initial_shares: float) -> Tuple[float, float, List[Dict]]:
+def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame, initial_shares: float, ticker: str) -> Tuple[float, float, List[Dict]]:
     """
     실제 배당 데이터를 기반으로 재투자 계산
     
@@ -188,6 +188,7 @@ def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame
         dividends: 배당금 데이터
         price_data: 가격 데이터  
         initial_shares: 초기 보유 주식 수
+        ticker: 주식 티커
         
     Returns:
         Tuple[float, float, List[Dict]]: (총 주식 수, 누적 현금, 재투자 상세내역)
@@ -196,8 +197,8 @@ def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame
     accumulated_dividends = 0.0
     reinvestment_details = []
     
-    # 통화 정보
-    currency_symbol, _ = get_currency_info(dividends.index[0].strftime('%Y-%m-%d'))
+    # 통화 정보 - 티커를 기준으로 가져오기
+    currency_symbol, _ = get_currency_info(ticker)
     
     for div_date, dividend_per_share in dividends.items():
         div_date_str = div_date.strftime('%Y-%m-%d')
@@ -232,7 +233,7 @@ def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame
 
 def calculate_future_forecast(end_date_str: str, dividend_frequency: str, delta: relativedelta,
                             last_dividend: float, current_price: float, total_shares: float,
-                            accumulated_dividends: float, dividend_dates: pd.DatetimeIndex) -> Tuple[float, float, List[Dict]]:
+                            accumulated_dividends: float, dividend_dates: pd.DatetimeIndex, ticker: str) -> Tuple[float, float, List[Dict]]:
     """
     미래 배당 예측 계산
     
@@ -245,6 +246,7 @@ def calculate_future_forecast(end_date_str: str, dividend_frequency: str, delta:
         total_shares: 현재 보유 주식 수
         accumulated_dividends: 누적 현금
         dividend_dates: 기존 배당일들
+        ticker: 주식 티커
         
     Returns:
         Tuple[float, float, List[Dict]]: (최종 주식 수, 최종 누적 현금, 예측 상세내역)
@@ -256,7 +258,8 @@ def calculate_future_forecast(end_date_str: str, dividend_frequency: str, delta:
         return total_shares, accumulated_dividends, []
     
     forecast_details = []
-    currency_symbol, _ = get_currency_info(end_date_str)
+    # 통화 정보 - 티커를 기준으로 가져오기
+    currency_symbol, _ = get_currency_info(ticker)
     
     # 다음 배당일 계산
     if len(dividend_dates) > 0:
@@ -344,21 +347,21 @@ def simple_dividend_forecast(ticker: str, start_date: str, end_date: str, initia
         progress_bar.progress(60)
         status_text.text("🔄 배당 재투자 계산 중...")
         
-        # 3단계: 실제 데이터로 재투자 계산
+        # 3단계: 실제 데이터로 재투자 계산 (ticker 파라미터 추가)
         total_shares, accumulated_dividends, actual_details = calculate_actual_reinvestment(
-            actual_dividends, price_data, initial_shares
+            actual_dividends, price_data, initial_shares, ticker
         )
         
         progress_bar.progress(80)
         status_text.text("🔮 미래 예측 계산 중...")
         
-        # 4단계: 미래 예측 계산
+        # 4단계: 미래 예측 계산 (ticker 파라미터 추가)
         last_dividend = actual_dividends.iloc[-1]
         current_price = price_data.iloc[-1]['Close']
         
         final_shares, final_cash, forecast_details = calculate_future_forecast(
             end_date, dividend_frequency_unit, delta, last_dividend, current_price,
-            total_shares, accumulated_dividends, actual_dividends.index
+            total_shares, accumulated_dividends, actual_dividends.index, ticker
         )
         
         progress_bar.progress(100)
@@ -459,6 +462,7 @@ def main():
         ✅ **입력 검증**: 강화된 유효성 검사  
         ✅ **에러 처리**: 구체적인 해결방안 제시
         ✅ **코드 구조**: 함수 분리로 안정성 향상
+        ✅ **통화 표시**: 한국 주식 원화 표시 수정
         """)
     
     # 입력 섹션 - 모바일 친화적 레이아웃
@@ -711,10 +715,7 @@ def main():
                     file_name=f"{ticker}_dividend_simulation_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
-    
- 
-    
-   
+
 
 if __name__ == "__main__":
     main()
