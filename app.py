@@ -218,10 +218,10 @@ def calculate_actual_reinvestment(dividends: pd.Series, price_data: pd.DataFrame
         
         reinvestment_details.append({
             '날짜': div_date_str,
-            f'주 당 배당({currency_symbol})': round(dividend_per_share, 4),
+            f'주당배당({currency_symbol})': round(dividend_per_share, 4),
             '보유주식': round(total_shares - new_shares, 0),
-            f'총 배당금({currency_symbol})': round(total_dividend, 2),
-            f'누적 현금({currency_symbol})': round(accumulated_dividends, 2),
+            f'총배당금({currency_symbol})': round(total_dividend, 2),
+            f'누적현금({currency_symbol})': round(accumulated_dividends, 2),
             f'주가({currency_symbol})': round(price_on_date, 2),
             '신규매수': int(new_shares),
             '총보유주식': round(total_shares, 0),
