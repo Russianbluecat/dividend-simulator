@@ -431,7 +431,97 @@ def get_currency_info(ticker):
         return '₩', 'KRW'
     else:
         return '$', 'USD'
+        
+def update_visitor_stats():
+    """GitHub Gist를 활용한 영구 방문자 통계"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # GitHub Personal Access Token (Streamlit Secrets에 저장)
+    github_token = st.secrets.get("GITHUB_TOKEN", None)
+    gist_id = st.secrets.get("GIST_ID", None)
+    
+    if not github_token or not gist_id:
+        return 0, 0, today
+    
+    try:
+        # 기존 통계 가져오기
+        headers = {"Authorization": f"token {github_token}"}
+        response = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers)
+        
+        if response.status_code == 200:
+            gist_data = response.json()
+            stats_content = gist_data["files"]["visitor_stats.json"]["content"]
+            stats = json.loads(stats_content)
+        else:
+            # 처음 실행시
+            stats = {"total_visitors": 0, "daily_visitors": {}, "first_visit_date": today}
+        
+        # 세션 중복 방지
+        if "visited_today" not in st.session_state:
+            st.session_state.visited_today = True
+            
+            # 통계 업데이트
+            stats["total_visitors"] += 1
+            if today not in stats["daily_visitors"]:
+                stats["daily_visitors"][today] = 0
+            stats["daily_visitors"][today] += 1
+            
+            # GitHub Gist 업데이트
+            update_data = {
+                "files": {
+                    "visitor_stats.json": {
+                        "content": json.dumps(stats, ensure_ascii=False, indent=2)
+                    }
+                }
+            }
+            requests.patch(f"https://api.github.com/gists/{gist_id}", 
+                         headers=headers, 
+                         json=update_data)
+        
+        return stats["total_visitors"], stats["daily_visitors"].get(today, 0), stats.get("first_visit_date", today)
+        
+    except Exception:
+        return 0, 0, today
 
+def display_visitor_stats():
+    """방문자 통계 표시"""
+    total, today_count, first_date = update_visitor_stats()
+    
+    if total == 0 and today_count == 0:  # 설정이 안된 경우
+        return
+    
+    st.markdown("---")
+    st.markdown("### 📊 방문자 통계")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div style='text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 1.5rem; border-radius: 10px; color: white;'>
+            <h3 style='margin: 0; font-size: 1rem;'>👥 누적 방문자</h3>
+            <h2 style='margin: 0.5rem 0 0 0; font-size: 2rem; color: #FFD700;'>{total:,}명</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div style='text-align: center; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                    padding: 1.5rem; border-radius: 10px; color: white;'>
+            <h3 style='margin: 0; font-size: 1rem;'>📅 오늘 방문자</h3>
+            <h2 style='margin: 0.5rem 0 0 0; font-size: 2rem; color: #FFE4E6;'>{today_count:,}명</h2>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div style='text-align: center; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); 
+                    padding: 1.5rem; border-radius: 10px; color: white;'>
+            <h3 style='margin: 0; font-size: 1rem;'>🚀 서비스 시작</h3>
+            <h2 style='margin: 0.5rem 0 0 0; font-size: 1.5rem; color: #E1F9FE;'>{first_date}</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
 # 메인 UI
 def main():
     st.title("📈 배당 재투자 시뮬레이터")
@@ -725,6 +815,9 @@ def main():
                     file_name=f"{ticker}_dividend_simulation_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
+    
+    # 👇 여기에 추가! (main() 함수의 마지막 줄)
+    display_visitor_stats()
 
 
 if __name__ == "__main__":
