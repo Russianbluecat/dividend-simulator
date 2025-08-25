@@ -2,6 +2,7 @@
 # 📈 배당 재투자 시뮬레이터
 
 > 배당금으로 주식을 재투자했을 때의 복리 효과를 시각화하는 웹 애플리케이션
+> An interactive web app to explore how reinvesting dividends boosts long-term compounding growth
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)
