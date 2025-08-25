@@ -133,7 +133,7 @@ mypy streamlit_app.py
 ## 👨‍💻 개발자
 
 **Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
+- GitHub: [@Russianbluecat/](https://github.com/yourusername)
 - Email: ss3007@naver.com
 
 ## 🙏 감사의 말
