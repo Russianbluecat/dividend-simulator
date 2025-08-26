@@ -11,6 +11,7 @@ import json
 import os
 from typing import Dict, List, Optional, Tuple, Any
 import requests
+import pytz
 
 # 페이지 설정
 st.set_page_config(
@@ -435,7 +436,9 @@ def get_currency_info(ticker):
         
 def update_visitor_stats():
     """GitHub Gist를 활용한 영구 방문자 통계"""
-    today = datetime.now().strftime("%Y-%m-%d")
+    # KST 기준으로 오늘 날짜 계산
+    kst = pytz.timezone('Asia/Seoul')
+    today = datetime.now(kst).strftime("%Y-%m-%d")  # 👈 KST 기준으로 변경
     
     # GitHub Personal Access Token (Streamlit Secrets에 저장)
     github_token = st.secrets.get("GITHUB_TOKEN", None)
