@@ -522,10 +522,23 @@ def display_visitor_stats():
             <h2 style='margin: 0.5rem 0 0 0; font-size: 1.5rem; color: #E1F9FE;'>{first_date}</h2>
         </div>
         """, unsafe_allow_html=True)
+
+def add_google_analytics():
+    ga_id = st.secrets.get("GOOGLE_ANALYTICS_ID", "G-XXXXXXXXXX")
+    ga_tag = f"""
+    <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+      gtag('config', '{ga_id}');
+    </script>
+    """
+    components.html(ga_tag, height=0)
         
 # 메인 UI
 def main():
-    # 🎯 여기 추가!
+    # 구글 애널리틱스 추가
     add_google_analytics()
     
     st.title("📈 배당 재투자 시뮬레이터")
@@ -820,34 +833,8 @@ def main():
                     mime="text/csv"
                 )
     
-    
-    # 👇 여기에 추가! (main() 함수의 마지막 줄)
+    # 방문자 통계 표시
     display_visitor_stats()
-    
-def add_google_analytics():
-    ga_id = st.secrets.get("GOOGLE_ANALYTICS_ID", "G-XXXXXXXXXX")
-    ga_tag = f"""
-    <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){{dataLayer.push(arguments);}}
-      gtag('js', new Date());
-      gtag('config', '{ga_id}');
-    </script>
-    """
-    components.html(ga_tag, height=0)
-
-def track_event(event_name: str, parameters: dict = None):
-    if parameters is None:
-        parameters = {}
-    js_code = f"""
-    <script>
-      if (typeof gtag !== 'undefined') {{
-        gtag('event', '{event_name}', {json.dumps(parameters)});
-      }}
-    </script>
-    """
-    components.html(js_code, height=0)    
 
 if __name__ == "__main__":
     main()
