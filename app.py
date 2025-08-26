@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
@@ -524,6 +525,9 @@ def display_visitor_stats():
         
 # 메인 UI
 def main():
+    # 🎯 여기 추가!
+    add_google_analytics()
+    
     st.title("📈 배당 재투자 시뮬레이터")
     st.markdown("### 배당금으로 주식을 재투자했을 때의 복리 효과를 계산해보세요!")
     
@@ -816,9 +820,34 @@ def main():
                     mime="text/csv"
                 )
     
+    
     # 👇 여기에 추가! (main() 함수의 마지막 줄)
     display_visitor_stats()
+    
+def add_google_analytics():
+    ga_id = st.secrets.get("GOOGLE_ANALYTICS_ID", "G-XXXXXXXXXX")
+    ga_tag = f"""
+    <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+      gtag('config', '{ga_id}');
+    </script>
+    """
+    components.html(ga_tag, height=0)
 
+def track_event(event_name: str, parameters: dict = None):
+    if parameters is None:
+        parameters = {}
+    js_code = f"""
+    <script>
+      if (typeof gtag !== 'undefined') {{
+        gtag('event', '{event_name}', {json.dumps(parameters)});
+      }}
+    </script>
+    """
+    components.html(js_code, height=0)    
 
 if __name__ == "__main__":
     main()
