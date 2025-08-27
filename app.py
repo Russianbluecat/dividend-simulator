@@ -20,6 +20,21 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+def add_google_analytics():
+    ga_id = st.secrets.get("GOOGLE_ANALYTICS_ID", "G-XXXXXXXXXX")
+    ga_tag = f"""
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){{dataLayer.push(arguments);}}
+      gtag('js', new Date());
+      gtag('config', '{ga_id}');
+    </script>
+    """
+    st.markdown(ga_tag, unsafe_allow_html=True)
+# ✅ 함수 호출 (꼭 필요!)
+add_google_analytics()
 
 class ValidationError(Exception):
     """사용자 입력 검증 오류"""
@@ -526,23 +541,11 @@ def display_visitor_stats():
         </div>
         """, unsafe_allow_html=True)
 
-def add_google_analytics():
-    ga_id = st.secrets.get("GOOGLE_ANALYTICS_ID", "G-XXXXXXXXXX")
-    ga_tag = f"""
-    <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){{dataLayer.push(arguments);}}
-      gtag('js', new Date());
-      gtag('config', '{ga_id}');
-    </script>
-    """
-    components.html(ga_tag, height=0)
+
         
 # 메인 UI
 def main():
-    # 구글 애널리틱스 추가
-    add_google_analytics()
+    
     
     st.title("📈 배당 재투자 시뮬레이터")
     st.markdown("### 배당금으로 주식을 재투자했을 때의 복리 효과를 계산해보세요!")
